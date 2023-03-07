@@ -37,7 +37,7 @@ func Connect() error {
 }
 
 func migrate() error {
-	if err := DB.AutoMigrate(&model.User{}, &model.RefreshToken{}); err != nil{
+	if err := DB.AutoMigrate(&model.User{}, &model.RefreshToken{}, &model.Todo{}); err != nil{
 		return err
 	}
 

@@ -34,9 +34,9 @@ func UniqueField(fl validator.FieldLevel) bool {
 
 	parentID := parentIDField.Interface().(uint)
 
-	duplicateEmployee := model.User{}
-	duplicateResult := database.DB.Table("users").Where(field+" = ?", value).First(&duplicateEmployee)
-	if !errors.Is(duplicateResult.Error, gorm.ErrRecordNotFound) && duplicateEmployee.ID != uint(parentID) {
+	duplicateField := model.User{}
+	duplicateResult := database.DB.Table("users").Where(field+" = ?", value).First(&duplicateField)
+	if !errors.Is(duplicateResult.Error, gorm.ErrRecordNotFound) && duplicateField.Id != uint(parentID) {
 		return false
 	}
 

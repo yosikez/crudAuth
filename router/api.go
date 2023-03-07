@@ -4,12 +4,16 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yosikez/crudAuth/config"
 	"github.com/yosikez/crudAuth/controller"
 	"github.com/yosikez/crudAuth/middleware"
 )
 
-func RegisterRoute(router *gin.Engine) {
+func RegisterRoute(router *gin.Engine, conn *config.RabbitMQConnection, rmqCfg *config.RabbitMQ) {
+	
 	authController := controller.NewAuthController()
+	todoController := controller.NewTodoController(conn, rmqCfg)
+
 
 	router.POST("/register", authController.Register)
 	router.POST("/login", authController.Login)
@@ -25,4 +29,10 @@ func RegisterRoute(router *gin.Engine) {
 			"name" : username,
 		})
 	})
+
+	protected.GET("/todos", todoController.FindAll)
+	protected.GET("/todos/:id", todoController.FindById)
+	protected.POST("/todos", todoController.Create)
+	protected.PUT("/todos/:id", todoController.Update)
+	protected.DELETE("/todos/:id", todoController.Delete)
 }
