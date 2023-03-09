@@ -12,7 +12,7 @@ type Todo struct {
 	Description string    `gorm:"column:description;type:text" json:"description" binding:"required"`
 	DueDate     string    `gorm:"column:due_date" json:"due_date" binding:"required,datetime=2006-01-02"`
 	IsComplete  bool      `gorm:"column:is_complete;default:false" json:"is_complete"`
-	UserId      uint      `gorm:"foreignKey:User;OnUpdate:CASCADE;OnDelete:CASCADE"`
+	UserId      uint      `gorm:"foreignKey:User;OnUpdate:CASCADE;OnDelete:CASCADE" json:"user_id"`
 	CreateAt    time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdateAt    time.Time `gorm:"column:updated_at" json:"updated_at"`
 }

@@ -1,7 +1,6 @@
 package model
 
 import (
-	"errors"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -21,7 +20,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 	now := time.Now()
 	hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return errors.New(err.Error())
+		return err
 	}
 
 	u.Password = string(hash)

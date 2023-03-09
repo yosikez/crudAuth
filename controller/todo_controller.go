@@ -8,21 +8,27 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/yosikez/crudAuth/config"
 	"github.com/yosikez/crudAuth/database"
 	"github.com/yosikez/crudAuth/model"
-	amqp "github.com/rabbitmq/amqp091-go"
 	cusMessage "github.com/yosikez/custom-error-message"
 )
 
 type TodoController struct {
-	rmq *config.RabbitMQConnection
+	rmq    *config.RabbitMQConnection
 	rmqCfg *config.RabbitMQ
+}
+
+type Message struct {
+	Todo      model.Todo `json:"todo"`
+	UserEmail string     `json:"user_email"`
+	Username  string     `json:"username"`
 }
 
 func NewTodoController(rqConnection *config.RabbitMQConnection, rqConfig *config.RabbitMQ) *TodoController {
 	return &TodoController{
-		rmq: rqConnection,
+		rmq:    rqConnection,
 		rmqCfg: rqConfig,
 	}
 }
@@ -76,10 +82,6 @@ func (t *TodoController) FindById(c *gin.Context) {
 		})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data": todo,
-	})
 }
 
 func (t *TodoController) Create(c *gin.Context) {
@@ -105,7 +107,7 @@ func (t *TodoController) Create(c *gin.Context) {
 		return
 	}
 
-	q, err := t.rmq.Channel.QueueDeclare("todo_create_queue", false, false, false, false, nil,)
+	q, err := t.rmq.Channel.QueueDeclare("todo_create_queue", false, false, false, false, nil)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -119,13 +121,19 @@ func (t *TodoController) Create(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to bind a queue",
-			"error" : err.Error(),
+			"message": "failed to bind a queue",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	msg, err := json.Marshal(todo)
+	message := &Message{
+		Todo:      todo,
+		UserEmail: c.GetString("userEmail"),
+		Username:  c.GetString("username"),
+	}
+
+	msg, err := json.Marshal(&message)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -139,9 +147,9 @@ func (t *TodoController) Create(c *gin.Context) {
 	defer cancel()
 
 	err = t.rmq.Channel.PublishWithContext(ctx, t.rmqCfg.ExchangeName, q.Name, false, false, amqp.Publishing{
-			ContentType: "application/json",
-			Body:        msg,
-		},
+		ContentType: "application/json",
+		Body:        msg,
+	},
 	)
 
 	if err != nil {
@@ -162,8 +170,8 @@ func (t *TodoController) Update(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message" : "invalid todo id",
-			"error": "id must be a number",
+			"message": "invalid todo id",
+			"error":   "id must be a number",
 		})
 		return
 	}
@@ -171,8 +179,8 @@ func (t *TodoController) Update(c *gin.Context) {
 	var todo model.Todo
 	if err := database.DB.First(&todo, id).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message" : "failed to find todo to update",
-			"error" : err.Error(),
+			"message": "failed to find todo to update",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -180,16 +188,16 @@ func (t *TodoController) Update(c *gin.Context) {
 	if err := c.ShouldBind(&todo); err != nil {
 		errFields := cusMessage.GetErrMess(err, todo, nil)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message" : "validation error",
-			"error" : errFields,
+			"message": "validation error",
+			"error":   errFields,
 		})
 		return
 	}
 
 	if err := database.DB.Save(&todo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to create todo",
-			"error": err.Error(),
+			"message": "failed to update todo",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -208,18 +216,24 @@ func (t *TodoController) Update(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to bind a queue",
-			"error" : err.Error(),
+			"message": "failed to bind a queue",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	msg, err := json.Marshal(&todo)
+	message := &Message{
+		Todo:      todo,
+		UserEmail: c.GetString("userEmail"),
+		Username:  c.GetString("username"),
+	}
+
+	msg, err := json.Marshal(&message)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to marshal json for msg rabbitmq",
-			"error" : err.Error(),
+			"message": "failed to marshal json for msg rabbitmq",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -229,20 +243,108 @@ func (t *TodoController) Update(c *gin.Context) {
 
 	err = t.rmq.Channel.PublishWithContext(ctx, t.rmqCfg.ExchangeName, q.Name, false, false, amqp.Publishing{
 		ContentType: "application/json",
-		Body: msg,
+		Body:        msg,
 	})
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to publish message to rabbitmq",
-			"error" : err.Error(),
+			"message": "failed to publish message to rabbitmq",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data" : todo,
+		"data": todo,
 	})
+}
+
+func (t *TodoController) DoneTodo(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid todo id",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	var todo model.Todo
+	if err := database.DB.First(&todo, id).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "failed to find todo to update",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	todo.IsComplete = true
+
+	if err := database.DB.Save(&todo).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to create todo",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	q, err := t.rmq.Channel.QueueDeclare("todo_done_queue", false, false, false, false, nil)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to declare queue rabbitmq",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	err = t.rmq.Channel.QueueBind("todo_done_queue", "todo_done_queue", t.rmqCfg.ExchangeName, false, nil)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to bind a queue",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	message := &Message{
+		Todo:      todo,
+		UserEmail: c.GetString("userEmail"),
+		Username:  c.GetString("username"),
+	}
+
+	msg, err := json.Marshal(&message)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to marshal json for msg rabbitmq",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = t.rmq.Channel.PublishWithContext(ctx, t.rmqCfg.ExchangeName, q.Name, false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        msg,
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to publish message to rabbitmq",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": todo,
+	})
+
 }
 
 func (t *TodoController) Delete(c *gin.Context) {
@@ -250,8 +352,8 @@ func (t *TodoController) Delete(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message" : "invalid todo id",
-			"error" : err.Error(),
+			"message": "invalid todo id",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -259,16 +361,16 @@ func (t *TodoController) Delete(c *gin.Context) {
 	var todo model.Todo
 	if err := database.DB.First(&todo, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
-			"message" : "failed to find todo to delete",
-			"error" : err.Error(),
+			"message": "failed to find todo to delete",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	if err := database.DB.Delete(&todo).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to delete todo",
-			"error" : err.Error(),
+			"message": "failed to delete todo",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -277,8 +379,8 @@ func (t *TodoController) Delete(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to declare queue rabbitmq",
-			"error" : err.Error(),
+			"message": "failed to declare queue rabbitmq",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -287,18 +389,24 @@ func (t *TodoController) Delete(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to bind a queue",
-			"error" : err.Error(),
+			"message": "failed to bind a queue",
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	msg, err := json.Marshal(&todo)
+	message := &Message{
+		Todo:      todo,
+		UserEmail: c.GetString("userEmail"),
+		Username:  c.GetString("username"),
+	}
+
+	msg, err := json.Marshal(&message)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to marshal json for the message rabbitmq",
-			"error" : err.Error(),
+			"message": "failed to marshal json for the message rabbitmq",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -308,19 +416,19 @@ func (t *TodoController) Delete(c *gin.Context) {
 
 	err = t.rmq.Channel.PublishWithContext(ctx, t.rmqCfg.ExchangeName, q.Name, false, false, amqp.Publishing{
 		ContentType: "application/json",
-		Body: msg,
+		Body:        msg,
 	})
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"message" : "failed to publish message to rabbitmq",
-			"error" : err.Error(),
+			"message": "failed to publish message to rabbitmq",
+			"error":   err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message" : "todo deleted successfully",
+		"message": "todo deleted successfully",
 	})
 
 }

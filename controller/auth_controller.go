@@ -39,7 +39,7 @@ func (a *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	accessToken, refreshToken, err := auth.GenerateTokens(user.Id, user.Username)
+	accessToken, refreshToken, err := auth.GenerateTokens(user.Id, user.Username, user.Email)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -86,7 +86,7 @@ func (a *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	accessToken, refreshToken, err := auth.GenerateTokens(user.Id, user.Username)
+	accessToken, refreshToken, err := auth.GenerateTokens(user.Id, user.Username, user.Email)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

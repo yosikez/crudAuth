@@ -19,5 +19,6 @@ var SecretKey = os.Getenv("SECRET_KEY")
 type Claims struct {
 	Id       uint   `json:"id"`
 	Username string `json:"username"`
+	Email    string `json:"email"`
 	jwt.StandardClaims
 }

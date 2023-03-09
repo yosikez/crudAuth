@@ -14,10 +14,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func GenerateTokens(userId uint, username string) (accessToken, refreshToken string, err error) {
+func GenerateTokens(userId uint, username string, email string) (accessToken, refreshToken string, err error) {
 	accessTokenClaims := config.Claims{
 		Id:       userId,
 		Username: username,
+		Email:    email,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(config.AccessTokenDuration).Unix(),
 		},
@@ -34,6 +35,7 @@ func GenerateTokens(userId uint, username string) (accessToken, refreshToken str
 	refreshTokenClaims := config.Claims{
 		Id:       userId,
 		Username: username,
+		Email:    email,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(config.RefreshTokenDuration).Unix(),
 			Issuer:    config.RefreshTokenIssuer,
@@ -75,6 +77,7 @@ func RefreshTokens(refreshToken string) (accessToken, newRefreshToken string, er
 	accessTokenClaims := config.Claims{
 		Id:       claims.Id,
 		Username: claims.Username,
+		Email:    claims.Email,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(config.AccessTokenDuration).Unix(),
 		},
@@ -91,6 +94,7 @@ func RefreshTokens(refreshToken string) (accessToken, newRefreshToken string, er
 	newRefreshTokenClaims := config.Claims{
 		Id:       claims.Id,
 		Username: claims.Username,
+		Email:    claims.Email,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(config.RefreshTokenDuration).Unix(),
 			Issuer:    config.RefreshTokenIssuer,

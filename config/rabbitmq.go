@@ -18,8 +18,8 @@ type RabbitMQ struct {
 }
 
 type RabbitMQConnection struct {
-	Connection   *amqp.Connection
-	Channel      *amqp.Channel
+	Connection *amqp.Connection
+	Channel    *amqp.Channel
 }
 
 func (rmq *RabbitMQ) GetUrl() string {
@@ -35,13 +35,12 @@ func LoadRabbitMQ() (*RabbitMQ, error) {
 	}
 
 	rabbitmqConfig := &RabbitMQ{
-		Host:     os.Getenv("RMQ_HOST"),
-		Username: os.Getenv("RMQ_USERNAME"),
-		Password: os.Getenv("RMQ_PASSWORD"),
+		Host:         os.Getenv("RMQ_HOST"),
+		Username:     os.Getenv("RMQ_USERNAME"),
+		Password:     os.Getenv("RMQ_PASSWORD"),
 		ExchangeName: os.Getenv("RMQ_EXCHANGE_NAME"),
 		ExchangeKind: os.Getenv("RMQ_EXCHANGE_KIND"),
 	}
 
 	return rabbitmqConfig, nil
 }
-
